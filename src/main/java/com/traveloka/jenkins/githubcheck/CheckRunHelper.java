@@ -1,6 +1,8 @@
 package com.traveloka.jenkins.githubcheck;
 
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.jenkinsci.plugins.displayurlapi.DisplayURLProvider;
 import org.jenkinsci.plugins.github_branch_source.Connector;
@@ -22,6 +24,7 @@ import jenkins.scm.api.SCMRevisionAction;
 import jenkins.scm.api.SCMSource;
 
 public class CheckRunHelper {
+  private final static Logger LOGGER = Logger.getLogger(CheckRunHelper.class.getName());
   boolean isValid = false;
 
   Job<?, ?> job;
@@ -53,9 +56,9 @@ public class CheckRunHelper {
       try {
         revision = source.fetch(head, listener);
       } catch (IOException e) {
-        // ignore error
+        LOGGER.log(Level.WARNING, "Can not fetch scm revision: IOException", e);
       } catch (InterruptedException e) {
-        // ignore error
+        LOGGER.log(Level.WARNING, "Can not fetch scm revision: InterruptedException", e);
       }
     }
     if (revision instanceof SCMRevisionImpl) {
@@ -63,7 +66,7 @@ public class CheckRunHelper {
     } else if (revision instanceof PullRequestSCMRevision) {
       commitHash = ((PullRequestSCMRevision) revision).getPullHash();
     } else {
-      // can not get commitHash
+      LOGGER.log(Level.WARNING, "Invalid scm revision");
       return;
     }
 
@@ -74,8 +77,14 @@ public class CheckRunHelper {
     builder(checkName, status, conclusion, output).create();
   }
 
+  public static class InvalidContextException extends IOException {
+  }
+
   GHCheckRunBuilder builder(String checkName, Status status, Conclusion conclusion, CheckRunOutput origingalOutput)
       throws IOException {
+    if (!isValid) {
+      throw new InvalidContextException();
+    }
 
     String externalId = new CheckRunExternalId(job.getFullName(), run.number).toString();
 

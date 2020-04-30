@@ -30,19 +30,20 @@ public class CheckRunOutput implements Cloneable {
     return super.clone();
   }
 
+  @JsonIgnoreProperties(ignoreUnknown = true)
   public static class AnnotationJSON {
-    String path;
-    int start_line;
-    int end_line;
-    String annotation_level;
-    String message;
-    Integer start_column;
-    Integer end_column;
-    String title;
-    String raw_details;
+    public String path;
+    public int start_line;
+    public int end_line;
+    public String annotation_level;
+    public String message;
+    public Integer start_column;
+    public Integer end_column;
+    public String title;
+    public String raw_details;
 
     Annotation toBuilder() {
-      AnnotationLevel level = annotation_level != null ? AnnotationLevel.valueOf(annotation_level)
+      AnnotationLevel level = annotation_level != null ? AnnotationLevel.valueOf(annotation_level.toUpperCase())
           : AnnotationLevel.NOTICE;
       Annotation a = new Annotation(path, start_line, end_line, level, message);
       if (start_column != null) {

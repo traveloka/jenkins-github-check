@@ -2,30 +2,30 @@ package com.traveloka.jenkins.githubcheck;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.URL;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Sets;
 
 import org.jenkinsci.plugins.github.extension.GHEventsSubscriber;
 import org.jenkinsci.plugins.github_branch_source.GitHubSCMSource;
-import org.jenkinsci.plugins.workflow.cps.replay.ReplayAction;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.kohsuke.github.GHEvent;
-import org.kohsuke.github.GitHub;
 import org.kohsuke.github.GHEventPayload.CheckRun;
+import org.kohsuke.github.GitHub;
 
 import hudson.Extension;
 import hudson.model.Action;
+import hudson.model.Cause;
+import hudson.model.CauseAction;
 import hudson.model.Item;
 import hudson.model.ParametersAction;
+import hudson.model.TaskListener;
 import hudson.security.ACL;
 import hudson.security.ACLContext;
 import jenkins.model.Jenkins;
@@ -34,19 +34,12 @@ import jenkins.scm.api.SCMRevisionAction;
 import jenkins.scm.api.SCMSource;
 import jenkins.scm.api.SCMSourceOwner;
 
-/**
- * This subscriber manages {@link GHEvent} PULL_REQUEST_REVIEW edits.
- */
 @Extension
 public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
   /**
    * Logger.
    */
   private static final Logger LOGGER = Logger.getLogger(CheckRunGHEventSubscriber.class.getName());
-
-  /**
-   * Regex pattern for a GitHub repository.
-   */
 
   @Override
   protected boolean isApplicable(Item item) {
@@ -85,7 +78,7 @@ public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
     }
 
     if (!"rerequested".equals(payload.getAction())) {
-      LOGGER.info("Ignoring event " + payload.getAction());
+      LOGGER.log(Level.FINER, "Ignoring event " + payload.getAction());
       return;
     }
 
@@ -94,6 +87,9 @@ public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
       LOGGER.warning("Trying to rebuild invalid check");
       return;
     }
+
+    LOGGER.fine(String.format("rebuilding %s #%d", id.job, id.run));
+
     try (ACLContext context = ACL.as(ACL.SYSTEM)) {
       Jenkins jenkins = Jenkins.getInstanceOrNull();
       WorkflowJob job = jenkins.getItemByFullName(id.job, WorkflowJob.class);
@@ -108,6 +104,7 @@ public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
       }
 
       List<Action> actions = new ArrayList<>();
+      actions.add(new CauseAction(new CheckRunRerequestedCause(payload.getCheckRun().getHtmlUrl())));
       actions.addAll(run.getActions(ParametersAction.class));
       actions.addAll(run.getActions(SCMRevisionAction.class));
 
@@ -115,4 +112,22 @@ public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
     }
   }
 
+  public static class CheckRunRerequestedCause extends Cause {
+
+    private final URL url;
+
+    public CheckRunRerequestedCause(URL url) {
+      this.url = url;
+    }
+
+    @Override
+    public String getShortDescription() {
+      return String.format("<a href=\"%s\">GitHub Check Run</a> rerequested.", url.toString());
+    }
+
+    @Override
+    public void print(TaskListener listener) {
+      listener.getLogger().printf("GitHub Check Run rerequested: %s", url.toString());
+    }
+  }
 }

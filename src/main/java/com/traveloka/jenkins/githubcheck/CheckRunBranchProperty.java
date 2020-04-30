@@ -10,14 +10,14 @@ import org.kohsuke.stapler.DataBoundConstructor;
 
 public class CheckRunBranchProperty extends BranchProperty {
     /**
-     * The comment body to trigger a new build on.
+     * The name of the check run
      */
     private final String checkName;
 
     /**
      * Constructor.
      * 
-     * @param checkName the comment body to trigger a new build on
+     * @param checkName The name of the check run
      */
     @DataBoundConstructor
     public CheckRunBranchProperty(String checkName) {
@@ -25,9 +25,9 @@ public class CheckRunBranchProperty extends BranchProperty {
     }
 
     /**
-     * The comment body to trigger a new build on.
+     * The name of the check run
      * 
-     * @return the comment body to use
+     * @return The name of the check run
      */
     public String getCheckName() {
         return checkName;

@@ -2,8 +2,11 @@ package com.traveloka.jenkins.githubcheck;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Serializable;
 import java.util.Date;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
@@ -24,38 +27,59 @@ import hudson.model.Run;
 import hudson.model.TaskListener;
 
 public class WithCheckRunStep extends Step {
-  private final String name;
-  private final String outputFile;
+  private static final Logger LOGGER = Logger.getLogger(WithCheckRunStep.class.getName());
+  private final Arg arg;
 
   @DataBoundConstructor
-  public WithCheckRunStep(String name, String outputFile) {
-    this.name = name;
-    this.outputFile = outputFile;
+  public WithCheckRunStep(String name, String outputFile, String title, String summary) {
+    this.arg = new Arg(name, outputFile, title, summary);
   }
 
   @Override
   public StepExecution start(StepContext context) throws Exception {
-    return new Execution(name, outputFile, context);
+    return new Execution(arg, context);
+  }
+
+  public String getName() {
+    return arg.name;
+  }
+
+  public String getOutputFile() {
+    return arg.outputFile;
+  }
+
+  public String getTitle() {
+    return arg.title;
+  }
+
+  public String getSummary() {
+    return arg.summary;
+  }
+
+  private static class Arg implements Serializable {
+    private static final long serialVersionUID = 1L;
+
+    private final String name;
+    private final String outputFile;
+    private final String title;
+    private final String summary;
+
+    Arg(String name, String outputFile, String title, String summary) {
+      this.name = name;
+      this.outputFile = outputFile;
+      this.title = title;
+      this.summary = summary;
+    }
   }
 
   public static class Execution extends AbstractStepExecutionImpl {
     private static final long serialVersionUID = 1;
 
-    private final String name;
-    private final String outputFile;
+    private final Arg arg;
 
-    Execution(String name, String outputFile, StepContext context) {
+    Execution(Arg arg, StepContext context) {
       super(context);
-      this.name = name;
-      this.outputFile = outputFile;
-    }
-
-    public String getName() {
-      return name;
-    }
-
-    public String getOutputFile() {
-      return outputFile;
+      this.arg = arg;
     }
 
     @Override
@@ -66,10 +90,11 @@ public class WithCheckRunStep extends Step {
       TaskListener listener = context.get(TaskListener.class);
       CheckRunHelper cr = new CheckRunHelper(run, listener);
 
+      listener.getLogger().printf("Stating check %s", arg.name);
       Date startTime = new Date();
-      cr.builder(name, Status.IN_PROGRESS, null, readOutput(context, outputFile)).withStartedAt(startTime).create();
+      cr.builder(arg.name, Status.IN_PROGRESS, null, readOutput(context, arg)).withStartedAt(startTime).create();
 
-      getContext().newBodyInvoker().withCallback(new Callback(cr, name, outputFile, startTime)).start();
+      getContext().newBodyInvoker().withCallback(new Callback(cr, arg, startTime)).start();
 
       return false;
     }
@@ -77,37 +102,42 @@ public class WithCheckRunStep extends Step {
     @Override
     public void onResume() {
     }
-
   }
 
-  private static CheckRunOutput readOutput(StepContext context, String outputFile)
-      throws IOException, InterruptedException {
-    if (outputFile != null && !outputFile.isEmpty()) {
+  private static CheckRunOutput readOutput(StepContext context, Arg arg) throws IOException, InterruptedException {
+    CheckRunOutput output = new CheckRunOutput();
 
-      FilePath file = context.get(FilePath.class).child(outputFile);
+    if (arg.outputFile != null && !arg.outputFile.isEmpty()) {
+
+      FilePath file = context.get(FilePath.class).child(arg.outputFile);
       if (file.exists()) {
         ObjectMapper mapper = new ObjectMapper();
 
         try (InputStream stream = file.read()) {
-          return mapper.readValue(stream, CheckRunOutput.class);
+          output = mapper.readValue(stream, CheckRunOutput.class);
         }
       }
     }
 
-    return new CheckRunOutput();
+    if (arg.title != null && !arg.title.isEmpty()) {
+      output.title = arg.title;
+    }
+    if (arg.summary != null && !arg.summary.isEmpty()) {
+      output.summary = arg.summary;
+    }
+
+    return output;
   }
 
   private static class Callback extends BodyExecutionCallback {
     private static final long serialVersionUID = 1L;
     private transient final CheckRunHelper crHelper;
-    private final String outputFile;
-    private final String name;
+    private final Arg arg;
     private final Date startTime;
 
-    Callback(CheckRunHelper crHelper, String name, String outputFile, Date startTime) {
+    Callback(CheckRunHelper crHelper, Arg arg, Date startTime) {
       this.crHelper = crHelper;
-      this.name = name;
-      this.outputFile = outputFile;
+      this.arg = arg;
       this.startTime = startTime;
     }
 
@@ -119,13 +149,12 @@ public class WithCheckRunStep extends Step {
 
     @Override
     public void onFailure(StepContext context, Throwable t) {
-      createCheck(context, Conclusion.FAILURE, t);
-      context.onFailure(t);
+      context.onFailure(createCheck(context, Conclusion.FAILURE, t));
     }
 
-    private void createCheck(StepContext context, Conclusion conclusion, Throwable t) {
+    private Throwable createCheck(StepContext context, Conclusion conclusion, Throwable t) {
       try {
-        CheckRunOutput output = readOutput(context, outputFile);
+        CheckRunOutput output = readOutput(context, arg);
         if (t != null) {
           if (output.text == null) {
             output.text = "";
@@ -134,13 +163,14 @@ public class WithCheckRunStep extends Step {
           }
           output.text += "Build Error: " + t.getMessage();
         }
-        crHelper.builder(name, Status.COMPLETED, conclusion, output).withStartedAt(startTime)
+        crHelper.builder(arg.name, Status.COMPLETED, conclusion, output).withStartedAt(startTime)
             .withCompletedAt(new Date()).create();
       } catch (IOException e) {
-        e.printStackTrace();
+        LOGGER.log(Level.WARNING, "Can not create check run: IOException", e);
       } catch (InterruptedException e) {
-        e.printStackTrace();
+        LOGGER.log(Level.WARNING, "Can not create check run: InterruptedException", e);
       }
+      return t;
     }
   }
 
@@ -163,10 +193,6 @@ public class WithCheckRunStep extends Step {
 
     @Override
     public Set<? extends Class<?>> getRequiredContext() {
-      // Set<Class<?>> set = Collections.emptySet();
-      // set.add(TaskListener.class);
-      // set.add(Run.class);
-      // return set;
       return ImmutableSet.of(Run.class, TaskListener.class, FilePath.class);
     }
 
