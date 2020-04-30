@@ -10,13 +10,16 @@ public class CheckRunExternalId extends Object {
   private static final ObjectMapper mapper = new ObjectMapper();
   private static final Logger LOGGER = Logger.getLogger(EventListeners.class.getName());
 
+  public String job;
+  public int run;
+
   CheckRunExternalId(String job, int run) {
     this.job = job;
     this.run = run;
   }
 
-  public String job;
-  public int run;
+  CheckRunExternalId() {
+  }
 
   public String toString() {
     try {

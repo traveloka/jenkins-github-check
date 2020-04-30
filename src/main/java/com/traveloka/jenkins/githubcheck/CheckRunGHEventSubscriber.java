@@ -1,5 +1,10 @@
 package com.traveloka.jenkins.githubcheck;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -14,13 +19,18 @@ import org.jenkinsci.plugins.workflow.cps.replay.ReplayAction;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.kohsuke.github.GHEvent;
+import org.kohsuke.github.GitHub;
 import org.kohsuke.github.GHEventPayload.CheckRun;
 
 import hudson.Extension;
+import hudson.model.Action;
 import hudson.model.Item;
+import hudson.model.ParametersAction;
 import hudson.security.ACL;
 import hudson.security.ACLContext;
 import jenkins.model.Jenkins;
+import jenkins.model.ParameterizedJobMixIn;
+import jenkins.scm.api.SCMRevisionAction;
 import jenkins.scm.api.SCMSource;
 import jenkins.scm.api.SCMSourceOwner;
 
@@ -66,36 +76,42 @@ public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
 
   @Override
   protected void onEvent(final GHEvent event, final String payloadString) {
-    ObjectMapper mapper = new ObjectMapper();
     CheckRun payload;
     try {
-      payload = mapper.readValue(payloadString, CheckRun.class);
-    } catch (JsonProcessingException e) {
-      LOGGER.log(Level.WARNING, "Can not decode event payload", e);
+      payload = GitHub.offline().parseEventPayload(new StringReader(payloadString), CheckRun.class);
+    } catch (IOException e) {
+      LOGGER.log(Level.WARNING, "Cannot parse github webhook payload", e);
       return;
     }
 
-    if (payload.getAction() != "rerequested") {
+    if (!"rerequested".equals(payload.getAction())) {
       LOGGER.info("Ignoring event " + payload.getAction());
       return;
     }
 
-    String externalId = payload.getCheckRun().getExternalId();
-    if (externalId.isEmpty()) {
+    CheckRunExternalId id = CheckRunExternalId.fromString(payload.getCheckRun().getExternalId());
+    if (id == null) {
       LOGGER.warning("Trying to rebuild invalid check");
       return;
     }
-
-    CheckRunExternalId runPayload = CheckRunExternalId.fromString(externalId);
-
     try (ACLContext context = ACL.as(ACL.SYSTEM)) {
-      WorkflowJob job = Jenkins.get().getItemByFullName(runPayload.job, WorkflowJob.class);
+      Jenkins jenkins = Jenkins.getInstanceOrNull();
+      WorkflowJob job = jenkins.getItemByFullName(id.job, WorkflowJob.class);
       if (job == null) {
+        LOGGER.warning("Can not found job with name " + id.job);
         return;
       }
-      WorkflowRun run = job.getBuildByNumber(runPayload.run);
-      ReplayAction action = run.getAction(ReplayAction.class);
-      action.run2(action.getOriginalScript(), action.getOriginalLoadedScripts());
+      WorkflowRun run = job.getBuildByNumber(id.run);
+      if (run == null) {
+        LOGGER.warning(String.format("Can not found build %s #%d", id.job, id.run));
+        return;
+      }
+
+      List<Action> actions = new ArrayList<>();
+      actions.addAll(run.getActions(ParametersAction.class));
+      actions.addAll(run.getActions(SCMRevisionAction.class));
+
+      ParameterizedJobMixIn.scheduleBuild2(job, 0, actions.toArray(new Action[actions.size()]));
     }
   }
 
