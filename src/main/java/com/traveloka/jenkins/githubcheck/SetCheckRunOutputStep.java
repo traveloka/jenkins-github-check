@@ -2,17 +2,10 @@ package com.traveloka.jenkins.githubcheck;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
 
-import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.Gson;
 
 import org.jenkinsci.Symbol;
-import org.kohsuke.github.GHCheckRun;
-import org.kohsuke.github.GHCheckRunBuilder.Annotation;
-import org.kohsuke.github.GHCheckRunBuilder.Image;
-import org.kohsuke.github.GHCheckRunBuilder.Output;
 import org.kohsuke.stapler.DataBoundConstructor;
 
 import hudson.Extension;
@@ -42,6 +35,18 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
 
     public String getFile() {
         return file;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    public String getText() {
+        return text;
     }
 
     @Override
