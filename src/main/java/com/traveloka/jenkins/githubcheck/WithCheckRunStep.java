@@ -20,6 +20,7 @@ import org.jenkinsci.plugins.workflow.steps.StepExecution;
 import org.kohsuke.github.GHCheckRun.Conclusion;
 import org.kohsuke.github.GHCheckRun.Status;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 
 import hudson.Extension;
 import hudson.FilePath;
@@ -31,8 +32,8 @@ public class WithCheckRunStep extends Step {
   private final Arg arg;
 
   @DataBoundConstructor
-  public WithCheckRunStep(String name, String outputFile, String title, String summary) {
-    this.arg = new Arg(name, outputFile, title, summary);
+  public WithCheckRunStep(String name) {
+    this.arg = new Arg(name);
   }
 
   @Override
@@ -56,19 +57,31 @@ public class WithCheckRunStep extends Step {
     return arg.summary;
   }
 
+  @DataBoundSetter
+  public void setOutputFile(String outputFile) {
+    arg.outputFile = outputFile;
+  }
+
+  @DataBoundSetter
+  public void setTitle(String title) {
+    arg.title = title;
+  }
+
+  @DataBoundSetter
+  public void setSummary(String summary) {
+    arg.summary = summary;
+  }
+
   private static class Arg implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private final String name;
-    private final String outputFile;
-    private final String title;
-    private final String summary;
+    private String outputFile;
+    private String title;
+    private String summary;
 
-    Arg(String name, String outputFile, String title, String summary) {
+    Arg(String name) {
       this.name = name;
-      this.outputFile = outputFile;
-      this.title = title;
-      this.summary = summary;
     }
   }
 

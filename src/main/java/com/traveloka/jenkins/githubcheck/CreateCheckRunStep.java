@@ -9,6 +9,7 @@ import org.jenkinsci.Symbol;
 import org.kohsuke.github.GHCheckRun.Conclusion;
 import org.kohsuke.github.GHCheckRun.Status;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 
 import hudson.Extension;
 import hudson.FilePath;
@@ -25,14 +26,15 @@ public class CreateCheckRunStep extends Builder implements SimpleBuildStep {
     private final String name;
     private final String status;
     private final String conclusion;
-    private final String outputFile;
+    private String outputFile;
+    private String title;
+    private String summary;
 
     @DataBoundConstructor
-    public CreateCheckRunStep(String name, String status, String conclusion, String outputFile) {
+    public CreateCheckRunStep(String name, String status, String conclusion) {
         this.name = name;
         this.status = status;
         this.conclusion = conclusion;
-        this.outputFile = outputFile;
     }
 
     public String getName() {
@@ -51,11 +53,34 @@ public class CreateCheckRunStep extends Builder implements SimpleBuildStep {
         return outputFile;
     }
 
+    public String getTitle() {
+        return title;
+    }
+
+    public String getSummary() {
+        return summary;
+    }
+
+    @DataBoundSetter
+    public void setOutputFile(String outputFile) {
+        this.outputFile = outputFile;
+    }
+
+    @DataBoundSetter
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    @DataBoundSetter
+    public void setSummary(String summary) {
+        this.summary = summary;
+    }
+
     @Override
     public void perform(Run<?, ?> run, FilePath workspace, Launcher launcher, TaskListener listener)
             throws InterruptedException, IOException {
 
-        CheckRunOutput output = null;
+        CheckRunOutput output = new CheckRunOutput();
         if (outputFile != null && !outputFile.isEmpty()) {
             FilePath file = workspace.child(outputFile);
             ObjectMapper mapper = new ObjectMapper();
@@ -63,15 +88,21 @@ public class CreateCheckRunStep extends Builder implements SimpleBuildStep {
                 output = mapper.readValue(stream, CheckRunOutput.class);
             }
         }
-        CheckRunHelper cr = new CheckRunHelper(run, listener);
         Status crStatus = Status.IN_PROGRESS;
         Conclusion crConclusion = Conclusion.NEUTRAL;
         if (status != null && !status.isEmpty()) {
-            crStatus = Status.valueOf(status);
+            crStatus = Status.valueOf(status.toUpperCase());
         }
         if (conclusion != null && !conclusion.isEmpty()) {
-            crConclusion = Conclusion.valueOf(conclusion);
+            crConclusion = Conclusion.valueOf(conclusion.toUpperCase());
         }
+        if (title != null && !title.isEmpty()) {
+            output.title = title;
+        }
+        if (summary != null && !summary.isEmpty()) {
+            output.summary = summary;
+        }
+        CheckRunHelper cr = new CheckRunHelper(run, listener);
         cr.create(name, crStatus, crConclusion, output);
     }
 
