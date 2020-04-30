@@ -92,6 +92,11 @@ public class CheckRunHelper {
 
           case FAILURE:
             output.summary = Messages.CheckRunHelper_FailedSummary();
+            break;
+
+          case CANCELLED:
+            output.summary = Messages.CheckRunHelper_CanceledSummary();
+            break;
 
           default:
             output.summary = Messages.CheckRunHelper_UnknownSummary();
