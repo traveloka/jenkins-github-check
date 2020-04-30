@@ -2,11 +2,13 @@ package com.traveloka.jenkins.githubcheck;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nonnull;
 
+import org.kohsuke.github.GHCheckRunBuilder;
 import org.kohsuke.github.GHCheckRun.Conclusion;
 import org.kohsuke.github.GHCheckRun.Status;
 
@@ -80,8 +82,9 @@ public class EventListeners {
 
     Result result = run.getResult();
     try {
+      GHCheckRunBuilder builder;
       if (result == null || run.isBuilding()) {
-        cr.create(checkName, Status.IN_PROGRESS, null, null);
+        builder = cr.builder(checkName, Status.IN_PROGRESS, null, null);
       } else {
         Conclusion conclusion = result.isBetterOrEqualTo(Result.SUCCESS) ? Conclusion.SUCCESS
             : result.isWorseOrEqualTo(Result.ABORTED) ? Conclusion.CANCELLED : Conclusion.FAILURE;
@@ -92,8 +95,11 @@ public class EventListeners {
           output = action.getOutput();
         }
 
-        cr.create(checkName, Status.COMPLETED, conclusion, output);
+        builder = cr.builder(checkName, Status.COMPLETED, conclusion, output);
+        builder.withCompletedAt(new Date(run.getTimeInMillis() + run.getDuration()));
       }
+      builder.withStartedAt(run.getTime()).create();
+
     } catch (IOException e) {
       LOGGER.log(Level.WARNING, "Error when creating github check run", e);
     }
