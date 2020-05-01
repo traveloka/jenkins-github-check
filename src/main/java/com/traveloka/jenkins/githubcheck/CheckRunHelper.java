@@ -77,16 +77,13 @@ public class CheckRunHelper {
     builder(checkName, status, conclusion, output).create();
   }
 
-  public static class InvalidContextException extends IOException {
-  }
-
   GHCheckRunBuilder builder(String checkName, Status status, Conclusion conclusion, CheckRunOutput origingalOutput)
       throws IOException {
     if (!isValid) {
       throw new InvalidContextException();
     }
 
-    String externalId = new CheckRunExternalId(job.getFullName(), run.number).toString();
+    CheckRunExternalId externalId = new CheckRunExternalId(job.getFullName(), run.number);
 
     CheckRunOutput output = origingalOutput == null ? new CheckRunOutput() : origingalOutput;
     if (output.title == null || output.title.isEmpty()) {
@@ -121,7 +118,7 @@ public class CheckRunHelper {
     GHCheckRunBuilder builder = github.getRepository(source.getRepoOwner() + "/" + source.getRepository())
         .createCheckRun(checkName, commitHash);
 
-    builder.withExternalID(externalId);
+    builder.withExternalID(externalId.toString());
     builder.withDetailsURL(DisplayURLProvider.get().getRunURL(run));
     builder.withStatus(status);
     builder.add(output.toBuilder());
@@ -130,4 +127,8 @@ public class CheckRunHelper {
     }
     return builder;
   }
+
+  public static class InvalidContextException extends IOException {
+  }
+
 }

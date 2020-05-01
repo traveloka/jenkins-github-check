@@ -6,7 +6,7 @@ import java.util.logging.Logger;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-public class CheckRunExternalId extends Object {
+public class CheckRunExternalId {
   private static final ObjectMapper mapper = new ObjectMapper();
   private static final Logger LOGGER = Logger.getLogger(EventListeners.class.getName());
 
