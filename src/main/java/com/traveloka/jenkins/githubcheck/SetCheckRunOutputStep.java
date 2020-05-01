@@ -6,7 +6,7 @@ import java.io.InputStream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jenkinsci.Symbol;
-import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 
 import hudson.Extension;
 import hudson.FilePath;
@@ -20,17 +20,35 @@ import jenkins.tasks.SimpleBuildStep;
 
 public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
 
-    private final String file;
-    private final String title;
-    private final String summary;
-    private final String text;
+    private String file;
+    private String title;
+    private String summary;
+    private String text;
+    private boolean flush;
 
-    @DataBoundConstructor
-    public SetCheckRunOutputStep(String file, String title, String summary, String text) {
+    @DataBoundSetter
+    public void setFile(String file) {
         this.file = file;
+    }
+
+    @DataBoundSetter
+    public void setTitle(String title) {
         this.title = title;
+    }
+
+    @DataBoundSetter
+    public void setSummary(String summary) {
         this.summary = summary;
+    }
+
+    @DataBoundSetter
+    public void setText(String text) {
         this.text = text;
+    }
+
+    @DataBoundSetter
+    public void setFlush(boolean flush) {
+        this.flush = flush;
     }
 
     public String getFile() {
@@ -47,6 +65,10 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
 
     public String getText() {
         return text;
+    }
+
+    public boolean getFlush() {
+        return flush;
     }
 
     @Override
