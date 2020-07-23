@@ -6,6 +6,7 @@ import java.io.InputStream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.jenkinsci.Symbol;
+import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 
 import hudson.Extension;
@@ -25,6 +26,11 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
     private String summary;
     private String text;
     private boolean flush;
+
+    @DataBoundConstructor
+    public SetCheckRunOutputStep() {
+        // nothing to do here
+    }
 
     @DataBoundSetter
     public void setFile(String file) {
