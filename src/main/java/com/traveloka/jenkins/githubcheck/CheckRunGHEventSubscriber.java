@@ -12,9 +12,11 @@ import java.util.logging.Logger;
 import com.google.common.collect.Sets;
 
 import org.jenkinsci.plugins.github.extension.GHEventsSubscriber;
+import org.jenkinsci.plugins.github_branch_source.Connector;
 import org.jenkinsci.plugins.github_branch_source.GitHubSCMSource;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.kohsuke.github.GHCheckRunBuilder;
 import org.kohsuke.github.GHEvent;
 import org.kohsuke.github.GHEventPayload.CheckRun;
 import org.kohsuke.github.GitHub;
@@ -109,6 +111,28 @@ public class CheckRunGHEventSubscriber extends GHEventsSubscriber {
       actions.addAll(run.getActions(SCMRevisionAction.class));
 
       ParameterizedJobMixIn.scheduleBuild2(job, 0, actions.toArray(new Action[actions.size()]));
+
+      // send status to github
+      SCMSource src = SCMSource.SourceByItem.findSource(job);
+      if (!(src instanceof GitHubSCMSource)) {
+        return;
+      }
+      GitHubSCMSource source = (GitHubSCMSource) src;
+
+      if (source.getCredentialsId() == null) {
+        return;
+      }
+      GitHub github = Connector.connect(source.getApiUri(),
+          Connector.lookupScanCredentials(job, source.getApiUri(), source.getCredentialsId()));
+
+      GHCheckRunBuilder builder = github.getRepository(source.getRepoOwner() + "/" + source.getRepository())
+          .createCheckRun(payload.getCheckRun().getName(), payload.getCheckRun().getHeadSha());
+      GHCheckRunBuilder.Output output = new GHCheckRunBuilder.Output("Rerun", "Queued");
+      builder.add(output);
+      builder.create();
+    } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
     }
   }
 

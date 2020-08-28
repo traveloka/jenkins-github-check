@@ -103,6 +103,10 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
 
         CheckRunOutputAction action = new CheckRunOutputAction(output);
         run.addAction(action);
+
+        if (flush) {
+            CheckRunHelper.flush(run, listener);
+        }
     }
 
     @Symbol("setCheckRunOutput")

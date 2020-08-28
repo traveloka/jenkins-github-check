@@ -1,8 +1,11 @@
 package com.traveloka.jenkins.githubcheck;
 
 import java.io.IOException;
+import java.util.Date;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.annotation.Nonnull;
 
 import org.jenkinsci.plugins.displayurlapi.DisplayURLProvider;
 import org.jenkinsci.plugins.github_branch_source.Connector;
@@ -14,8 +17,10 @@ import org.kohsuke.github.GHCheckRunBuilder;
 import org.kohsuke.github.GitHub;
 
 import hudson.model.Job;
+import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
+import jenkins.branch.BranchProperty;
 import jenkins.branch.MultiBranchProject;
 import jenkins.plugins.git.AbstractGitSCMSource.SCMRevisionImpl;
 import jenkins.scm.api.SCMHead;
@@ -126,6 +131,59 @@ public class CheckRunHelper {
       builder.withConclusion(conclusion);
     }
     return builder;
+  }
+
+  public static void flush(final Run<?, ?> run, final @Nonnull TaskListener listener) {
+    if (run == null) {
+      return;
+    }
+
+    CheckRunHelper cr = new CheckRunHelper(run, listener);
+    if (!cr.isValid) {
+      return;
+    }
+
+    boolean propFound = false;
+    String checkName = "";
+    for (BranchProperty prop : cr.parentJob.getProjectFactory().getBranch(cr.job).getProperties()) {
+      if ((prop instanceof CheckRunBranchProperty)) {
+        checkName = ((CheckRunBranchProperty) prop).getCheckName().trim();
+        propFound = true;
+        break;
+      }
+    }
+
+    if (!propFound) {
+      return;
+    }
+
+    if (checkName.isEmpty()) {
+      checkName = cr.parentJob.getName();
+    }
+
+    Result result = run.getResult();
+    try {
+      GHCheckRunBuilder builder;
+      if (result == null || run.isBuilding()) {
+        builder = cr.builder(checkName, Status.IN_PROGRESS, null, null);
+      } else {
+        Conclusion conclusion = result.isBetterOrEqualTo(Result.SUCCESS) ? Conclusion.SUCCESS
+            : result.isWorseOrEqualTo(Result.ABORTED) ? Conclusion.CANCELLED : Conclusion.FAILURE;
+
+        CheckRunOutput output = null;
+        CheckRunOutputAction action = run.getAction(CheckRunOutputAction.class);
+        if (action != null) {
+          output = action.getOutput();
+        }
+
+        builder = cr.builder(checkName, Status.COMPLETED, conclusion, output);
+        builder.withCompletedAt(new Date(run.getTimeInMillis() + run.getDuration()));
+      }
+      builder.withStartedAt(run.getTime()).create();
+
+    } catch (IOException e) {
+      LOGGER.log(Level.WARNING, "Error when creating github check run", e);
+    }
   }
 
   public static class InvalidContextException extends IOException {

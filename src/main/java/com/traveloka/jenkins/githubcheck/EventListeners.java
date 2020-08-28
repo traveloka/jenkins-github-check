@@ -1,39 +1,27 @@
 package com.traveloka.jenkins.githubcheck;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Date;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.Nonnull;
 
-import org.kohsuke.github.GHCheckRunBuilder;
-import org.kohsuke.github.GHCheckRun.Conclusion;
-import org.kohsuke.github.GHCheckRun.Status;
-
 import hudson.Extension;
 import hudson.FilePath;
-import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.listeners.RunListener;
 import hudson.model.listeners.SCMListener;
 import hudson.scm.SCM;
 import hudson.scm.SCMRevisionState;
-import jenkins.branch.BranchProperty;
 
 public class EventListeners {
-
-  private static final Logger LOGGER = Logger.getLogger(EventListeners.class.getName());
-
   @Extension
   public static class JobCheckOutListener extends SCMListener {
 
     @Override
     public void onCheckout(Run<?, ?> run, SCM scm, FilePath workspace, TaskListener listener, File changelogFile,
         SCMRevisionState pollingBaseline) throws Exception {
-      updateCheckRun(run, listener);
+      CheckRunHelper.flush(run, listener);
     }
 
   }
@@ -43,65 +31,12 @@ public class EventListeners {
 
     @Override
     public void onStarted(Run<?, ?> run, TaskListener listener) {
-      updateCheckRun(run, listener);
+      CheckRunHelper.flush(run, listener);
     }
 
     @Override
     public void onCompleted(final Run<?, ?> run, final @Nonnull TaskListener listener) {
-      updateCheckRun(run, listener);
-    }
-  }
-
-  private static void updateCheckRun(final Run<?, ?> run, final @Nonnull TaskListener listener) {
-    if (run == null) {
-      return;
-    }
-
-    CheckRunHelper cr = new CheckRunHelper(run, listener);
-    if (!cr.isValid) {
-      return;
-    }
-
-    boolean propFound = false;
-    String checkName = "";
-    for (BranchProperty prop : cr.parentJob.getProjectFactory().getBranch(cr.job).getProperties()) {
-      if ((prop instanceof CheckRunBranchProperty)) {
-        checkName = ((CheckRunBranchProperty) prop).getCheckName().trim();
-        propFound = true;
-        break;
-      }
-    }
-
-    if (!propFound) {
-      return;
-    }
-
-    if (checkName.isEmpty()) {
-      checkName = cr.parentJob.getName();
-    }
-
-    Result result = run.getResult();
-    try {
-      GHCheckRunBuilder builder;
-      if (result == null || run.isBuilding()) {
-        builder = cr.builder(checkName, Status.IN_PROGRESS, null, null);
-      } else {
-        Conclusion conclusion = result.isBetterOrEqualTo(Result.SUCCESS) ? Conclusion.SUCCESS
-            : result.isWorseOrEqualTo(Result.ABORTED) ? Conclusion.CANCELLED : Conclusion.FAILURE;
-
-        CheckRunOutput output = null;
-        CheckRunOutputAction action = run.getAction(CheckRunOutputAction.class);
-        if (action != null) {
-          output = action.getOutput();
-        }
-
-        builder = cr.builder(checkName, Status.COMPLETED, conclusion, output);
-        builder.withCompletedAt(new Date(run.getTimeInMillis() + run.getDuration()));
-      }
-      builder.withStartedAt(run.getTime()).create();
-
-    } catch (IOException e) {
-      LOGGER.log(Level.WARNING, "Error when creating github check run", e);
+      CheckRunHelper.flush(run, listener);
     }
   }
 
