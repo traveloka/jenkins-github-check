@@ -82,7 +82,7 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
             throws InterruptedException, IOException {
 
         CheckRunOutput output = new CheckRunOutput();
-        if (file != null && file.isEmpty()) {
+        if (file != null && !file.isEmpty()) {
             FilePath filePath = workspace.child(file);
             listener.getLogger().printf("Using %s as github check output\n", filePath.toURI());
             ObjectMapper mapper = new ObjectMapper();
