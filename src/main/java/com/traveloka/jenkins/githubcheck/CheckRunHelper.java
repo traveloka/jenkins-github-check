@@ -2,6 +2,8 @@ package com.traveloka.jenkins.githubcheck;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -11,7 +13,13 @@ import org.jenkinsci.plugins.displayurlapi.DisplayURLProvider;
 import org.jenkinsci.plugins.github_branch_source.Connector;
 import org.jenkinsci.plugins.github_branch_source.GitHubSCMSource;
 import org.jenkinsci.plugins.github_branch_source.PullRequestSCMRevision;
+import org.jenkinsci.plugins.workflow.actions.ArgumentsAction;
+import org.jenkinsci.plugins.workflow.actions.LabelAction;
+import org.jenkinsci.plugins.workflow.cps.nodes.StepAtomNode;
 import org.jenkinsci.plugins.workflow.flow.FlowExecution;
+import org.jenkinsci.plugins.workflow.graph.FlowNode;
+import org.jenkinsci.plugins.workflow.graphanalysis.AbstractFlowScanner;
+import org.jenkinsci.plugins.workflow.graphanalysis.DepthFirstScanner;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.kohsuke.github.GHCheckRun.Conclusion;
 import org.kohsuke.github.GHCheckRun.Status;
@@ -181,7 +189,7 @@ public class CheckRunHelper {
           String cause = getRunError(run);
           if (cause != null && !cause.isEmpty()) {
             String currentText = output.text == null ? "" : (output.text + "\n\n");
-            output.text = currentText + "**Error message:**\n```\n" + cause + "\n```";
+            output.text = currentText + "**Error:**: " + cause;
           }
         }
 
@@ -204,11 +212,41 @@ public class CheckRunHelper {
     if (execution == null)
       return null;
 
-    Throwable cause = execution.getCauseOfFailure();
+    List<FlowNode> heads = execution.getCurrentHeads();
+
+    AbstractFlowScanner scanner = new DepthFirstScanner();
+    FlowNode node = scanner.findFirstMatch(heads, item -> {
+      return item instanceof StepAtomNode && item.getError() != null;
+    });
+    if (node == null)
+      node = heads.get(0);
+
+    Throwable cause = node.getError().getError();
     if (cause == null)
       return null;
 
-    return cause.getLocalizedMessage();
+    String message = getNodeLabel(node) + ": " + cause.getLocalizedMessage();
+    return message;
+  }
+
+  static private String getNodeLabel(FlowNode node) {
+    LabelAction labelAction = node.getPersistentAction(LabelAction.class);
+    if (labelAction != null) {
+      return labelAction.getDisplayName();
+    } else {
+      Map<String, Object> argAction = ArgumentsAction.getFilteredArguments(node);
+      Object labelArg = argAction.get("label");
+      if (labelArg != null && labelArg instanceof String) {
+        return (String) labelArg;
+      }
+
+      Object scriptArg = argAction.get("script");
+      if (scriptArg != null && scriptArg instanceof String) {
+        return "script(`" + (String) scriptArg + "`)";
+      }
+    }
+
+    return node.getDisplayName();
   }
 
   public static class InvalidContextException extends IOException {
