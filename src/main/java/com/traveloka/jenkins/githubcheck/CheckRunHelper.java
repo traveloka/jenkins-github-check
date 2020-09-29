@@ -11,6 +11,8 @@ import org.jenkinsci.plugins.displayurlapi.DisplayURLProvider;
 import org.jenkinsci.plugins.github_branch_source.Connector;
 import org.jenkinsci.plugins.github_branch_source.GitHubSCMSource;
 import org.jenkinsci.plugins.github_branch_source.PullRequestSCMRevision;
+import org.jenkinsci.plugins.workflow.flow.FlowExecution;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.kohsuke.github.GHCheckRun.Conclusion;
 import org.kohsuke.github.GHCheckRun.Status;
 import org.kohsuke.github.GHCheckRunBuilder;
@@ -82,7 +84,7 @@ public class CheckRunHelper {
     builder(checkName, status, conclusion, output).create();
   }
 
-  GHCheckRunBuilder builder(String checkName, Status status, Conclusion conclusion, CheckRunOutput origingalOutput)
+  protected GHCheckRunBuilder builder(String checkName, Status status, Conclusion conclusion, CheckRunOutput output)
       throws IOException {
     if (!isValid) {
       throw new InvalidContextException();
@@ -90,7 +92,6 @@ public class CheckRunHelper {
 
     CheckRunExternalId externalId = new CheckRunExternalId(job.getFullName(), run.number);
 
-    CheckRunOutput output = origingalOutput == null ? new CheckRunOutput() : origingalOutput;
     if (output.title == null || output.title.isEmpty()) {
       output.title = run.getFullDisplayName();
     }
@@ -164,26 +165,50 @@ public class CheckRunHelper {
     Result result = run.getResult();
     try {
       GHCheckRunBuilder builder;
+      CheckRunOutput output = new CheckRunOutput();
+      CheckRunOutputAction action = run.getAction(CheckRunOutputAction.class);
+      if (action != null) {
+        output = action.getOutput();
+      }
+
       if (result == null || run.isBuilding()) {
-        builder = cr.builder(checkName, Status.IN_PROGRESS, null, null);
+        builder = cr.builder(checkName, Status.IN_PROGRESS, null, output);
       } else {
         Conclusion conclusion = result.isBetterOrEqualTo(Result.SUCCESS) ? Conclusion.SUCCESS
             : result.isWorseOrEqualTo(Result.ABORTED) ? Conclusion.CANCELLED : Conclusion.FAILURE;
 
-        CheckRunOutput output = null;
-        CheckRunOutputAction action = run.getAction(CheckRunOutputAction.class);
-        if (action != null) {
-          output = action.getOutput();
+        if (conclusion != Conclusion.SUCCESS) {
+          String cause = getRunError(run);
+          if (cause != null && !cause.isEmpty()) {
+            String currentText = output.text == null ? "" : (output.text + "\n\n");
+            output.text = currentText + "**Error message:**\n```\n" + cause + "\n```";
+          }
         }
 
-        builder = cr.builder(checkName, Status.COMPLETED, conclusion, output);
-        builder.withCompletedAt(new Date(run.getTimeInMillis() + run.getDuration()));
+        builder = cr.builder(checkName, Status.COMPLETED, conclusion, output)
+            .withCompletedAt(new Date(run.getTimeInMillis() + run.getDuration()));
       }
+
       builder.withStartedAt(run.getTime()).create();
 
     } catch (IOException e) {
       LOGGER.log(Level.WARNING, "Error when creating github check run", e);
     }
+  }
+
+  static private String getRunError(Run<?, ?> run) {
+    if (!(run instanceof WorkflowRun))
+      return null;
+
+    FlowExecution execution = ((WorkflowRun) run).getExecution();
+    if (execution == null)
+      return null;
+
+    Throwable cause = execution.getCauseOfFailure();
+    if (cause == null)
+      return null;
+
+    return cause.getLocalizedMessage();
   }
 
   public static class InvalidContextException extends IOException {

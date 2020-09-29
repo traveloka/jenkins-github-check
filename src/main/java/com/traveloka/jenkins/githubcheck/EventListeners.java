@@ -1,7 +1,6 @@
 package com.traveloka.jenkins.githubcheck;
 
 import java.io.File;
-import java.util.logging.Logger;
 
 import javax.annotation.Nonnull;
 
