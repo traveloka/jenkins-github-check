@@ -30,6 +30,17 @@ public class CheckRunOutput implements Cloneable {
     return super.clone();
   }
 
+  public void merge(CheckRunOutput source) {
+    if (source.title != null)
+      this.title = source.title;
+    if (source.summary != null)
+      this.summary = source.summary;
+    if (source.text != null)
+      this.text = source.text;
+    if (source.annotations != null)
+      this.annotations = source.annotations;
+  }
+
   @JsonIgnoreProperties(ignoreUnknown = true)
   public static class AnnotationJSON {
     public String path;

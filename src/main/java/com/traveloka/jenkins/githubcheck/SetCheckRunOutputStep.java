@@ -82,13 +82,18 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
             throws InterruptedException, IOException {
 
         CheckRunOutput output = new CheckRunOutput();
+        CheckRunOutputAction action = run.getAction(CheckRunOutputAction.class);
+        if (action != null) {
+            output = action.getOutput();
+        }
         if (file != null && !file.isEmpty()) {
             FilePath filePath = workspace.child(file);
             listener.getLogger().printf("Using %s as github check output\n", filePath.toURI());
             ObjectMapper mapper = new ObjectMapper();
 
             try (InputStream stream = filePath.read()) {
-                output = mapper.readValue(stream, CheckRunOutput.class);
+                CheckRunOutput newOutput = mapper.readValue(stream, CheckRunOutput.class);
+                output.merge(newOutput);
             }
         }
         if (title != null && !title.isEmpty()) {
@@ -101,8 +106,10 @@ public class SetCheckRunOutputStep extends Builder implements SimpleBuildStep {
             output.text = text;
         }
 
-        CheckRunOutputAction action = new CheckRunOutputAction(output);
-        run.addAction(action);
+        if (action == null) {
+            action = new CheckRunOutputAction(output);
+            run.addAction(action);
+        }
 
         if (flush) {
             CheckRunHelper.flush(run, listener);
